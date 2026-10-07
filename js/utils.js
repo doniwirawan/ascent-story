@@ -51,7 +51,7 @@ const fmtD = m => {
 };
 const fmtElev = m => Math.round(elevVal(m)).toLocaleString() + ' ' + elevUnit();
 const fmtT  = s => { const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m`; };
-const fmtDt = d => new Date(d).toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'});
+const fmtDt = d => new Date(d).toLocaleDateString(window.LANG === 'id' ? 'id-ID' : 'en-GB', {weekday:'short', day:'numeric', month:'short'});
 
 const isRide = a => ['Ride','VirtualRide','EBikeRide','GravelRide','MountainBikeRide'].includes(a.type);
 function isRun(a){ return a.type==='Run'||a.type==='VirtualRun'||a.type==='TrailRun'; }
@@ -59,6 +59,3 @@ function isWalk(a){ return a.type==='Walk'||a.type==='Hike'; }
 function isSwim(a){ return a.type==='Swim'||a.type==='OpenWaterSwim'; }
 function _swimPace(speed){ if(!speed) return '—'; const sec=Math.round(100/speed); return `${Math.floor(sec/60)}:${String(Math.round(sec%60)).padStart(2,'0')}`; }
 
-// The story code calls tr()/trf() for labels; this app is English only.
-const tr = s => s;
-const trf = (s, ...v) => s.replace(/\{(\d+)\}/g, (_, i) => v[i] ?? '');

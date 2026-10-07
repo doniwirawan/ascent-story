@@ -35,7 +35,10 @@
 
 <header class="topbar">
   <div class="brand">Ascent <span>Story</span></div>
-  <div class="tagline">Runs in your browser — your files never leave your device</div>
+  <div class="topbar-right">
+    <div class="tagline">Runs in your browser — your files never leave your device</div>
+    <div class="lang" role="group" aria-label="Language"><button type="button" class="lang-btn" data-lang="en">EN</button><button type="button" class="lang-btn" data-lang="id">ID</button></div>
+  </div>
 </header>
 
 <div class="modal-overlay open page" id="storyModal">
@@ -59,12 +62,12 @@
             <p class="src-note">Strava only lets a few athletes connect to a new app until it has been reviewed. If connecting fails, export the activity as a GPX file and use the Activity file tab.</p>
           </div>
           <div class="src-pane" data-pane="file" hidden>
-            <label class="drop" id="dropZone" for="fileInput">Drop a <b>.gpx</b> or <b>.fit</b> file, or click to choose</label>
+            <label class="drop" id="dropZone" for="fileInput" data-i18n-html="dropZone">Drop a <b>.gpx</b> or <b>.fit</b> file, or click to choose</label>
             <input type="file" id="fileInput" class="vis-hidden" accept=".gpx,.fit,application/gpx+xml,application/xml,text/xml,application/octet-stream" multiple>
             <p class="src-note">Files are read in your browser and never uploaded.</p>
             <details class="howto">
               <summary>How do I get a GPX or FIT file?</summary>
-              <ul>
+              <ul data-i18n-html="howtoList">
                 <li><b>Strava</b> (on a computer): open the activity, click <b>⋯</b> on the left, then <b>Export GPX</b>.</li>
                 <li><b>Strava app</b>: you can't export from the phone app; open strava.com in your phone's browser and use the steps above.</li>
                 <li><b>Garmin Connect</b>: open the activity, click the gear icon, then <b>Export to GPX</b> or <b>Export Original</b> (a FIT file).</li>
@@ -86,7 +89,7 @@
 
         <div>
           <div class="picker-label">Template</div>
-          <p class="src-note" style="margin:-2px 0 8px">Pick <b>Custom</b> to drag, resize, flip or hide each element on the card (right-click an element for more).</p>
+          <p class="src-note" style="margin:-2px 0 8px" data-i18n-html="templateHint">Pick <b>Custom</b> to drag, resize, flip or hide each element on the card (right-click an element for more).</p>
           <div class="layout-grid" id="layoutPicker"></div>
         </div>
 
@@ -139,7 +142,7 @@
               <span>Minimum distance: <b id="collageMinVal" style="color:var(--text);">30 km</b></span>
               <input type="range" id="collageMin" min="0" max="100" value="30" step="5" style="width:100%;accent-color:var(--orange);">
             </label>
-            <div style="font-size:10.5px;color:var(--muted);line-height:1.5;">Longest rides show first. Drag the dashed <b>“keep clear”</b> box on the preview to set where stickers won’t go.</div>
+            <div style="font-size:10.5px;color:var(--muted);line-height:1.5;" data-i18n-html="collageHint">Longest rides show first. Drag the dashed <b>“keep clear”</b> box on the preview to set where stickers won’t go.</div>
           </div>
         </div>
 
@@ -177,12 +180,13 @@
 </div>
 
 
+<script src="js/i18n.js"></script>
 <script src="js/utils.js"></script>
 <script src="js/story-core.js"></script>
 <script src="js/story-draw.js"></script>
 <script src="js/story-layouts.js"></script>
 <script src="js/story-ui.js"></script>
 <script src="js/app.js"></script>
-<footer class="foot">Open source (MIT) · <a href="https://github.com/doniwirawan/ascent-story">GitHub</a> · Part of <a href="https://ascent-analytics.doniwirawan.xyz/">Ascent</a> · Not affiliated with Strava</footer>
+<footer class="foot" data-i18n-html="footer">Open source (MIT) · <a href="https://github.com/doniwirawan/ascent-story">GitHub</a> · Part of <a href="https://ascent-analytics.doniwirawan.xyz/">Ascent</a> · Not affiliated with Strava</footer>
 </body>
 </html>

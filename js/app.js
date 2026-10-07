@@ -30,7 +30,7 @@ const tok = {
 async function connectStrava() {
   const r = await fetch('/api/config');
   const { clientId } = r.ok ? await r.json() : {};
-  if (!clientId) { showError('Strava login is not configured on this server. You can still upload a GPX or FIT file.'); return; }
+  if (!clientId) { showError(tr('Strava login is not configured on this server. You can still upload a GPX or FIT file.')); return; }
   const q = new URLSearchParams({
     client_id: clientId, response_type: 'code', approval_prompt: 'auto',
     redirect_uri: location.origin + '/callback.html', scope: 'read,activity:read_all',
@@ -43,7 +43,7 @@ async function refreshToken() {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh_token: tok.refresh }),
   });
-  if (!r.ok) { tok.clear(); throw new Error('Strava session expired — connect again'); }
+  if (!r.ok) { tok.clear(); throw new Error(tr('Strava session expired — connect again')); }
   tok.save(await r.json());
 }
 
@@ -55,7 +55,7 @@ async function api(ep, retry = false) {
     if (m[2]) return fileStreams[m[1]] || {};
     return acts.find(a => a.id === m[1]) || {};
   }
-  if (!tok.access) throw new Error('Not connected to Strava');
+  if (!tok.access) throw new Error(tr('Not connected to Strava'));
   if (tok.expires * 1000 < Date.now() + 60000) await refreshToken();
   const r = await fetch('https://www.strava.com/api/v3' + ep, { headers: { Authorization: 'Bearer ' + tok.access } });
   if (r.status === 401 && !retry) { await refreshToken(); return api(ep, true); }
@@ -64,7 +64,7 @@ async function api(ep, retry = false) {
 }
 
 async function loadStravaActivities() {
-  setStatus('Loading your Strava activities…');
+  setStatus(tr('Loading your Strava activities…'));
   const list = [];
   for (let page = 1; page <= 2; page++) {
     const batch = await api(`/athlete/activities?per_page=100&page=${page}`);
@@ -89,7 +89,7 @@ const thin = (pts, max) => pts.length <= max ? pts : Array.from({ length: max },
     [{lat, lng, ele, time (ms), hr, cad, power}] plus optional summary values. */
 function activityFromPoints(id, name, type, pts, summary = {}) {
   pts = pts.filter(p => isFinite(p.lat) && isFinite(p.lng) && !(p.lat === 0 && p.lng === 0));
-  if (pts.length < 2) throw new Error('No GPS track in this file');
+  if (pts.length < 2) throw new Error(tr('No GPS track in this file'));
   let dist = 0, moving = 0, maxSpeed = 0, gain = 0, lastEle = null;
   const dStream = [0], vStream = [0];
   for (let i = 1; i < pts.length; i++) {
@@ -146,7 +146,7 @@ function activityFromPoints(id, name, type, pts, summary = {}) {
 const GPX_TYPES = { running: 'Run', run: 'Run', trail_running: 'TrailRun', walking: 'Walk', hiking: 'Hike', mountain_biking: 'MountainBikeRide', gravel_cycling: 'GravelRide' };
 function parseGpx(text, id, fileName) {
   const doc = new DOMParser().parseFromString(text, 'application/xml');
-  if (doc.querySelector('parsererror')) throw new Error('Not a valid GPX file');
+  if (doc.querySelector('parsererror')) throw new Error(tr('Not a valid GPX file'));
   const pick = (el, tag) => { const n = el.getElementsByTagNameNS('*', tag)[0]; return n ? parseFloat(n.textContent) : null; };
   const pts = [...doc.getElementsByTagNameNS('*', 'trkpt'), ...doc.getElementsByTagNameNS('*', 'rtept')].map(el => {
     const time = el.getElementsByTagNameNS('*', 'time')[0];
@@ -169,9 +169,9 @@ const FIT_SUB = { mountain: 'MountainBikeRide', gravelCycling: 'GravelRide', tra
 async function parseFit(buf, id, fileName) {
   const { Decoder, Stream } = await import('https://cdn.jsdelivr.net/npm/@garmin/fitsdk@21/+esm');
   const decoder = new Decoder(Stream.fromArrayBuffer(buf));
-  if (!decoder.isFIT()) throw new Error('Not a valid FIT file');
+  if (!decoder.isFIT()) throw new Error(tr('Not a valid FIT file'));
   const { messages, errors } = decoder.read();
-  if (errors && errors.length && !(messages.recordMesgs || []).length) throw new Error('Could not read this FIT file');
+  if (errors && errors.length && !(messages.recordMesgs || []).length) throw new Error(tr('Could not read this FIT file'));
   const semi = v => v * (180 / 2 ** 31);
   const pts = (messages.recordMesgs || []).filter(r => r.positionLat != null && r.positionLong != null).map(r => ({
     lat: semi(r.positionLat), lng: semi(r.positionLong),
@@ -196,11 +196,11 @@ async function readFiles(files) {
     try {
       if (/\.gpx$/i.test(f.name)) { added.push(parseGpx(await f.text(), id, f.name)); track('file_import', { file_type: 'gpx' }); }
       else if (/\.fit$/i.test(f.name)) { added.push(await parseFit(await f.arrayBuffer(), id, f.name)); track('file_import', { file_type: 'fit' }); }
-      else throw new Error('Use a .gpx or .fit file');
+      else throw new Error(tr('Use a .gpx or .fit file'));
     } catch (e) { showError(`${f.name}: ${e.message}`); track('file_import_error', { reason: e.message.slice(0, 80) }); }
   }
   if (!added.length) return;
-  setStatus(added.length === 1 ? `Loaded ${added[0].name}` : `Loaded ${added.length} files`);
+  setStatus(added.length === 1 ? trf('Loaded {0}', added[0].name) : trf('Loaded {0} files', added.length));
   addActivities(added);
 }
 
@@ -227,7 +227,7 @@ function sampleActivity() {
     pts.push({ lat: -8.28 + 0.05 * Math.sin(a) + 0.012 * Math.sin(5 * a), lng: 115.16 + 0.07 * Math.cos(a) + 0.01 * Math.cos(3 * a),
       ele: 300 + 180 * Math.max(0, Math.sin(a - 1)), time: t0 + i * 20e3, hr: 138 + Math.round(14 * Math.sin(2 * a)), cad: 86 });
   }
-  const act = activityFromPoints('file-sample', 'Sample ride', 'Ride', pts);
+  const act = activityFromPoints('file-sample', tr('Sample ride'), 'Ride', pts);
   act._sample = true;
   return act;
 }
@@ -264,8 +264,8 @@ function setSourceTab(name) {
 async function openStrava() {
   try {
     const list = await loadStravaActivities();
-    setStatus(list.length ? `${list.length} activities loaded from Strava` : '');
-    if (!list.length) { showError('No activities found on your Strava account.'); return; }
+    setStatus(list.length ? trf('{0} activities loaded from Strava', list.length) : '');
+    if (!list.length) { showError(tr('No activities found on your Strava account.')); return; }
     acts = acts.filter(a => a._fromFile && !a._sample); // keep uploaded files, drop the sample
     addActivities(list);
   } catch (e) { showError(e.message); renderSource(); }
@@ -283,12 +283,23 @@ function exportCanvas(done) {
   }, 'image/png');
 }
 
+// Stat labels are drawn on the cards too, so they follow the language.
+function localizeStats() { STAT_DEFS.forEach(d => { if (d._en == null) d._en = d.label; d.label = tr(d._en); }); }
+
 document.addEventListener('DOMContentLoaded', () => {
+  applyLang(); localizeStats();
+  document.querySelectorAll('.lang-btn').forEach(b => b.onclick = () => {
+    if (b.dataset.lang === window.LANG) return;
+    setLang(b.dataset.lang); localizeStats(); track('language_select', { language: b.dataset.lang });
+    const sample = acts.find(a => a._sample); if (sample) sample.name = tr('Sample ride');
+    showActivities(parseInt($('activityPicker').value) || 0);
+    if (acts.length === 1 && sample) setStatus(tr('Showing a sample ride. Add your own file to replace it.'));
+  });
   renderSource();
   $('connectBtn').onclick = () => { track('strava_connect_start'); connectStrava(); };
   $('layoutPicker').addEventListener('click', e => { const b = e.target.closest('.layout-btn'); if (b) track('template_select', { template: b.dataset.layout }); });
   $('stravaBtn').onclick = openStrava;
-  $('logoutBtn').onclick = () => { tok.clear(); renderSource(); setStatus('Disconnected from Strava'); };
+  $('logoutBtn').onclick = () => { tok.clear(); renderSource(); setStatus(tr('Disconnected from Strava')); };
   document.querySelectorAll('.seg-btn').forEach(b => b.onclick = () => setSourceTab(b.dataset.src));
   let tab = 'file'; try { tab = localStorage.getItem('story_src') || tab; } catch {}
   setSourceTab(tab);
@@ -332,8 +343,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   if (navigator.clipboard && window.ClipboardItem) {
     $('copyBtn').onclick = () => exportCanvas(async blob => {
-      try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); setStatus('Image copied'); track('story_copy', cardInfo()); }
-      catch { showError('Copy is not allowed here — use Download'); }
+      try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); setStatus(tr('Image copied')); track('story_copy', cardInfo()); }
+      catch { showError(tr('Copy is not allowed here — use Download')); }
     });
   } else $('copyBtn').hidden = true;
   // Web Share (Instagram / WhatsApp / …) where the browser can share files, mostly mobile
@@ -348,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   acts = [sampleActivity()];
   showActivities(0);
-  setStatus('Showing a sample ride. Add your own file to replace it.');
+  setStatus(tr('Showing a sample ride. Add your own file to replace it.'));
   const q = new URLSearchParams(location.search);
   if (q.has('connected')) { track('login', { method: 'Strava' }); history.replaceState(null, '', '/'); }
   if (tok.access) openStrava();

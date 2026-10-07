@@ -56,7 +56,9 @@ same ones that power the Story card in the Ascent dashboard.
   block the API review that lifts the athlete cap). "Works with Strava" in descriptions is fine.
 - Analytics: GA4 property G-Y4VRDE800Q. Events carry only action names, template and size — never
   activity data or file contents.
-- Planned, not built: an English / Bahasa Indonesia language switch, like Ascent's.
+- English and Bahasa Indonesia (EN / ID switch; browser language picks the default). UI strings and
+  card stat labels and dates follow the language; template names and activity types stay English.
+  New UI text needs a `TR_ID` entry in `js/i18n.js`.
 
 ## Brand Commitments
 
