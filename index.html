@@ -1,10 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-Y4VRDE800Q"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-Y4VRDE800Q');
+  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ascent Story</title>
-  <meta name="description" content="Turn a Strava activity or a GPX/FIT file into a 1080×1920 story image. Runs in your browser.">
+  <meta name="description" content="Turn any ride, run or hike into a share-ready Instagram story, post or square image. 35 templates — works with Strava, GPX and FIT, all in your browser.">
   <meta name="theme-color" content="#090909">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -41,7 +49,7 @@
           </div>
           <div class="src-pane" data-pane="file" hidden>
             <label class="drop" id="dropZone" for="fileInput">Drop a <b>.gpx</b> or <b>.fit</b> file, or click to choose</label>
-            <input type="file" id="fileInput" class="vis-hidden" accept=".gpx,.fit" multiple>
+            <input type="file" id="fileInput" class="vis-hidden" accept=".gpx,.fit,application/gpx+xml,application/xml,text/xml,application/octet-stream" multiple>
             <p class="src-note">Files are read in your browser and never uploaded.</p>
           </div>
           <div class="status" id="status"></div>
@@ -52,6 +60,7 @@
           <div class="picker-label">Activity</div>
           <select id="activityPicker" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;"></select>
           <input type="text" id="actName" class="text-in" placeholder="Activity name" aria-label="Activity name" maxlength="80">
+          <div class="unit-row"><span>Size</span><select id="ratioPicker" aria-label="Image size"><option value="1920">Story 9:16</option><option value="1350">Portrait 4:5</option><option value="1080">Square 1:1</option></select></div>
           <div class="unit-row"><span>Units</span><select id="unitToggle" aria-label="Units"><option value="km">Metric</option><option value="mi">Imperial</option></select></div>
         </div>
 
@@ -68,7 +77,7 @@
               <input type="checkbox" id="chk-hideRoute" style="accent-color:var(--orange);"> Hide Map
             </label>
             <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;padding:5px 10px;background:var(--surface2);border-radius:5px;border:1px solid var(--border);" id="lbl-hideLogo">
-              <input type="checkbox" id="chk-hideLogo" style="accent-color:var(--orange);"> Hide Logo
+              <input type="checkbox" id="chk-hideLogo" style="accent-color:var(--orange);"> Hide watermark
             </label>
           </div>
         </div>
@@ -115,6 +124,7 @@
 
         <div>
           <div class="picker-label">Templates</div>
+          <p class="src-note" style="margin:-2px 0 8px">Pick <b>Custom</b> to drag, resize, flip or hide each element on the card (right-click an element for more).</p>
           <div class="layout-grid" id="layoutPicker"></div>
         </div>
       </div>

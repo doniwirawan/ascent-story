@@ -445,7 +445,7 @@ function drawLayout(canvas, act, selected, sc, layout) {
         const fallback = STAT_DEFS.filter(s => ['distance', 'moving_time', 'total_elevation_gain'].includes(s.key));
         for (const f of fallback) {
           if (cellStats.length >= 3) break;
-          if (!cellStats.find(c => c.key === f.key)) cellStats.push(f);
+          if (!cellStats.find(c => c.key === f.key) && statApplies(f, act)) cellStats.push(f);
         }
       }
       const cellW = innerW / cellStats.length;
@@ -476,7 +476,7 @@ function drawLayout(canvas, act, selected, sc, layout) {
         ctx.fillStyle = aCol;
         ctx.font = `900 ${Math.round(24 * S)}px -apple-system,sans-serif`;
         ctx.textAlign = 'right'; ctx.letterSpacing = '0.04em';
-        ctx.fillText('STRAVA', cardX + cardW - Math.round(48 * S), cardY + cardH - Math.round(40 * S));
+        ctx.fillText('ASCENT', cardX + cardW - Math.round(48 * S), cardY + cardH - Math.round(40 * S));
         ctx.letterSpacing = '0';
       }
       break;

@@ -377,9 +377,9 @@ function openStoryModal(){
 
   // layout thumbnails
   const lp=document.getElementById('layoutPicker');
-  lp.innerHTML=LAYOUTS.map(l=>`
+  lp.innerHTML=LAYOUTS.filter(l=>typeof layoutFits!=='function'||layoutFits(l.id)).map(l=>`
     <button class="layout-btn${l.id===activeLayout?' active':''}" data-layout="${l.id}">
-      <canvas class="layout-thumb" data-layout="${l.id}" width="216" height="384"></canvas>
+      <canvas class="layout-thumb" data-layout="${l.id}" width="216" height="${Math.round(document.getElementById('storyCanvas').height/5)}"></canvas>
       <span>${l.name}</span>
     </button>
   `).join('');

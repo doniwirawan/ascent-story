@@ -4,6 +4,14 @@
    activity objects, which is what the story code draws from. */
 
 let acts = [];
+
+// Google Analytics event (no-op if gtag is blocked). Only action names, the
+// template and the image size are sent — never file contents or activity data.
+function track(name, params) { try { if (typeof gtag === 'function') gtag('event', name, params || {}); } catch {} }
+// Templates whose elements overlap on shorter cards are only offered as stories.
+const LAYOUT_NOT_AT = { 1350: ['hero', 'graphic'], 1080: ['hero', 'graphic', 'map', 'column', 'street'] };
+function layoutFits(id) { const c = document.getElementById('storyCanvas'); return !(LAYOUT_NOT_AT[c ? c.height : 1920] || []).includes(id); }
+const cardInfo = () => ({ template: activeLayout, size: (document.getElementById('ratioPicker') || {}).value });
 const fileStreams = {}; // streams for activities read from files, by id
 
 /* ── Strava auth ── */
@@ -102,7 +110,7 @@ function activityFromPoints(id, name, type, pts, summary = {}) {
     else if (lastEle - p.ele > 2) lastEle = p.ele;
   }
   const avg = k => { const v = pts.map(p => p[k]).filter(x => x > 0); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
-  const max = k => { const v = pts.map(p => p[k]).filter(x => x > 0); return v.length ? Math.max(...v) : null; };
+  const max = k => { const v = pts.map(p => p[k]).filter(x => x > 0); return v.length ? v.reduce((m, x) => x > m ? x : m, 0) : null; };
   const t0 = pts[0].time, t1 = pts[pts.length - 1].time;
   const elapsed = t0 && t1 ? Math.round((t1 - t0) / 1000) : 0;
   if (!moving) moving = elapsed;
@@ -124,6 +132,7 @@ function activityFromPoints(id, name, type, pts, summary = {}) {
     start_latlng: [pts[0].lat, pts[0].lng],
     map: { summary_polyline: encodePolyline(thin(pts, 1500).map(p => [p.lat, p.lng])) },
     _detailed: true, _fromFile: true,
+    _noTime: !elapsed && !summary.moving_time, // a planned route: no timestamps
   };
   const s = thin(pts.map((p, i) => ({ ...p, d: dStream[i], v: vStream[i] })), 2000);
   const streams = { distance: { data: s.map(p => p.d) }, velocity_smooth: { data: s.map(p => p.v) } };
@@ -185,15 +194,25 @@ async function readFiles(files) {
   for (const f of files) {
     const id = 'file-' + Date.now().toString(36) + '-' + (fileSeq++);
     try {
-      if (/\.gpx$/i.test(f.name)) added.push(parseGpx(await f.text(), id, f.name));
-      else if (/\.fit$/i.test(f.name)) added.push(await parseFit(await f.arrayBuffer(), id, f.name));
+      if (/\.gpx$/i.test(f.name)) { added.push(parseGpx(await f.text(), id, f.name)); track('file_import', { file_type: 'gpx' }); }
+      else if (/\.fit$/i.test(f.name)) { added.push(await parseFit(await f.arrayBuffer(), id, f.name)); track('file_import', { file_type: 'fit' }); }
       else throw new Error('Use a .gpx or .fit file');
-    } catch (e) { showError(`${f.name}: ${e.message}`); }
+    } catch (e) { showError(`${f.name}: ${e.message}`); track('file_import_error', { reason: e.message.slice(0, 80) }); }
   }
   if (!added.length) return;
   setStatus(added.length === 1 ? `Loaded ${added[0].name}` : `Loaded ${added.length} files`);
   addActivities(added);
 }
+
+// A file only has the stats it recorded (a planned route has no times at all),
+// so leave off the ones it lacks instead of drawing 0 or a dash.
+const _statApplies = statApplies;
+statApplies = (s, a) => {
+  if (!_statApplies(s, a)) return false;
+  if (!a || !a._fromFile) return true;
+  const field = s.key === 'pace' ? 'average_speed' : s.key;
+  return !!a[field] && !(a._noTime && ['moving_time', 'pace', 'average_speed', 'max_speed'].includes(s.key));
+};
 
 /* ── UI ── */
 const $ = id => document.getElementById(id);
@@ -266,12 +285,25 @@ function exportCanvas(done) {
 
 document.addEventListener('DOMContentLoaded', () => {
   renderSource();
-  $('connectBtn').onclick = connectStrava;
+  $('connectBtn').onclick = () => { track('strava_connect_start'); connectStrava(); };
+  $('layoutPicker').addEventListener('click', e => { const b = e.target.closest('.layout-btn'); if (b) track('template_select', { template: b.dataset.layout }); });
   $('stravaBtn').onclick = openStrava;
   $('logoutBtn').onclick = () => { tok.clear(); renderSource(); setStatus('Disconnected from Strava'); };
   document.querySelectorAll('.seg-btn').forEach(b => b.onclick = () => setSourceTab(b.dataset.src));
   let tab = 'strava'; try { tab = localStorage.getItem('story_src') || tab; } catch {}
   setSourceTab(tab);
+
+  // image size: the canvas stays 1080 wide, only the height changes
+  const setRatio = h => {
+    $('storyCanvas').height = h;
+    if (!layoutFits(activeLayout)) activeLayout = 'strava';
+    document.querySelector('.story-preview').style.aspectRatio = `1080 / ${h}`;
+    $('ratioPicker').value = String(h);
+    try { localStorage.setItem('story_h', String(h)); } catch {}
+  };
+  let savedH = 1920; try { savedH = +localStorage.getItem('story_h') || 1920; } catch {}
+  setRatio([1920, 1350, 1080].includes(savedH) ? savedH : 1920);
+  $('ratioPicker').onchange = e => { setRatio(+e.target.value); track('size_select', { size: e.target.selectedOptions[0].text }); showActivities(parseInt($('activityPicker').value) || 0); };
 
   $('unitToggle').value = useImperial ? 'mi' : 'km';
   $('unitToggle').onchange = e => { setUnits(e.target.value === 'mi'); showActivities(parseInt($('activityPicker').value) || 0); };
@@ -279,19 +311,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const input = $('fileInput');
   input.onchange = () => { readFiles([...input.files]); input.value = ''; };
+  // a GPX/FIT dropped anywhere on the page is imported (not opened by the browser);
+  // photos dropped elsewhere are left alone
   const drop = $('dropZone');
-  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
-  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
-  drop.addEventListener('drop', e => readFiles([...e.dataTransfer.files]));
+  const hasFiles = e => [...(e.dataTransfer && e.dataTransfer.types || [])].includes('Files');
+  window.addEventListener('dragover', e => { if (hasFiles(e)) { e.preventDefault(); drop.classList.add('over'); } });
+  window.addEventListener('dragleave', e => { if (!e.relatedTarget) drop.classList.remove('over'); });
+  window.addEventListener('drop', e => {
+    drop.classList.remove('over');
+    const files = [...(e.dataTransfer && e.dataTransfer.files || [])].filter(f => /\.(gpx|fit)$/i.test(f.name));
+    if (!files.length) { if (hasFiles(e) && !e.target.closest('input[type=file]')) e.preventDefault(); return; }
+    e.preventDefault(); setSourceTab('file'); readFiles(files);
+  });
 
   $('downloadBtn').onclick = () => exportCanvas(blob => {
     const a = document.createElement('a');
     a.download = 'story.png'; a.href = URL.createObjectURL(blob); a.click();
+    track('story_download', cardInfo());
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   });
   if (navigator.clipboard && window.ClipboardItem) {
     $('copyBtn').onclick = () => exportCanvas(async blob => {
-      try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); setStatus('Image copied'); }
+      try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); setStatus('Image copied'); track('story_copy', cardInfo()); }
       catch { showError('Copy is not allowed here — use Download'); }
     });
   } else $('copyBtn').hidden = true;
@@ -301,11 +342,13 @@ document.addEventListener('DOMContentLoaded', () => {
   if (canShareFiles) {
     $('shareStoryBtn').style.display = '';
     $('shareStoryBtn').onclick = () => exportCanvas(async blob => {
-      try { await navigator.share({ files: [new File([blob], 'story.png', { type: 'image/png' })], title: 'My activity' }); } catch {}
+      try { await navigator.share({ files: [new File([blob], 'story.png', { type: 'image/png' })], title: 'My activity' }); track('story_share', cardInfo()); } catch {}
     });
   }
 
   acts = [sampleActivity()];
   showActivities(0);
+  const q = new URLSearchParams(location.search);
+  if (q.has('connected')) { track('login', { method: 'Strava' }); history.replaceState(null, '', '/'); }
   if (tok.access) openStrava();
 });
