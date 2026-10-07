@@ -11,9 +11,19 @@
   </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ascent Story</title>
-  <meta name="description" content="Turn any ride, run or hike into a share-ready Instagram story, post or square image. 35 templates — works with Strava, GPX and FIT, all in your browser.">
+  <title>Ascent Story — share-ready cards for your rides and runs</title>
+  <meta name="description" content="Turn any ride, run or hike into a share-ready Instagram story, post or square image. 43 templates — works with Strava, GPX and FIT, all in your browser.">
   <meta name="theme-color" content="#090909">
+  <link rel="canonical" href="https://story.doniwirawan.xyz/">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://story.doniwirawan.xyz/">
+  <meta property="og:title" content="Ascent Story — share-ready cards for your rides and runs">
+  <meta property="og:description" content="Turn any ride, run or hike into an Instagram story, post or square image. 43 templates, your own photos and stats. Works with Strava, GPX and FIT, all in your browser.">
+  <meta property="og:image" content="https://story.doniwirawan.xyz/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://story.doniwirawan.xyz/og.png">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -36,8 +46,8 @@
         <div class="src">
           <div class="picker-label">Source</div>
           <div class="seg" role="tablist">
-            <button type="button" class="seg-btn active" data-src="strava" role="tab">Strava</button>
-            <button type="button" class="seg-btn" data-src="file" role="tab">Activity file</button>
+            <button type="button" class="seg-btn active" data-src="file" role="tab">Activity file</button>
+            <button type="button" class="seg-btn" data-src="strava" role="tab">Strava</button>
           </div>
           <div class="src-pane" data-pane="strava">
             <button class="btn btn-primary" id="connectBtn">Connect with Strava</button>
@@ -46,11 +56,21 @@
               <button class="btn btn-ghost" id="logoutBtn">Disconnect</button>
             </div>
             <p class="src-note">Reads your recent activities to draw the card. Nothing is stored on a server.</p>
+            <p class="src-note">Strava only lets a few athletes connect to a new app until it has been reviewed. If connecting fails, export the activity as a GPX file and use the Activity file tab.</p>
           </div>
           <div class="src-pane" data-pane="file" hidden>
             <label class="drop" id="dropZone" for="fileInput">Drop a <b>.gpx</b> or <b>.fit</b> file, or click to choose</label>
             <input type="file" id="fileInput" class="vis-hidden" accept=".gpx,.fit,application/gpx+xml,application/xml,text/xml,application/octet-stream" multiple>
             <p class="src-note">Files are read in your browser and never uploaded.</p>
+            <details class="howto">
+              <summary>How do I get a GPX or FIT file?</summary>
+              <ul>
+                <li><b>Strava</b> (on a computer): open the activity, click <b>⋯</b> on the left, then <b>Export GPX</b>.</li>
+                <li><b>Strava app</b>: you can't export from the phone app; open strava.com in your phone's browser and use the steps above.</li>
+                <li><b>Garmin Connect</b>: open the activity, click the gear icon, then <b>Export to GPX</b> or <b>Export Original</b> (a FIT file).</li>
+                <li><b>Wahoo, Coros, Huawei, Komoot…</b>: look for <b>Export</b> or <b>Share → GPX</b> on the activity.</li>
+              </ul>
+            </details>
           </div>
           <div class="status" id="status"></div>
           <div class="error" id="error" role="alert"></div>
@@ -62,6 +82,12 @@
           <input type="text" id="actName" class="text-in" placeholder="Activity name" aria-label="Activity name" maxlength="80">
           <div class="unit-row"><span>Size</span><select id="ratioPicker" aria-label="Image size"><option value="1920">Story 9:16</option><option value="1350">Portrait 4:5</option><option value="1080">Square 1:1</option></select></div>
           <div class="unit-row"><span>Units</span><select id="unitToggle" aria-label="Units"><option value="km">Metric</option><option value="mi">Imperial</option></select></div>
+        </div>
+
+        <div>
+          <div class="picker-label">Template</div>
+          <p class="src-note" style="margin:-2px 0 8px">Pick <b>Custom</b> to drag, resize, flip or hide each element on the card (right-click an element for more).</p>
+          <div class="layout-grid" id="layoutPicker"></div>
         </div>
 
         <div>
@@ -122,11 +148,6 @@
           <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;" id="statToggles"></div>
         </div>
 
-        <div>
-          <div class="picker-label">Templates</div>
-          <p class="src-note" style="margin:-2px 0 8px">Pick <b>Custom</b> to drag, resize, flip or hide each element on the card (right-click an element for more).</p>
-          <div class="layout-grid" id="layoutPicker"></div>
-        </div>
       </div>
 
       <div class="story-right">

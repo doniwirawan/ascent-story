@@ -227,7 +227,7 @@ function sampleActivity() {
     pts.push({ lat: -8.28 + 0.05 * Math.sin(a) + 0.012 * Math.sin(5 * a), lng: 115.16 + 0.07 * Math.cos(a) + 0.01 * Math.cos(3 * a),
       ele: 300 + 180 * Math.max(0, Math.sin(a - 1)), time: t0 + i * 20e3, hr: 138 + Math.round(14 * Math.sin(2 * a)), cad: 86 });
   }
-  const act = activityFromPoints('file-sample', 'Morning Ride', 'Ride', pts);
+  const act = activityFromPoints('file-sample', 'Sample ride', 'Ride', pts);
   act._sample = true;
   return act;
 }
@@ -290,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('stravaBtn').onclick = openStrava;
   $('logoutBtn').onclick = () => { tok.clear(); renderSource(); setStatus('Disconnected from Strava'); };
   document.querySelectorAll('.seg-btn').forEach(b => b.onclick = () => setSourceTab(b.dataset.src));
-  let tab = 'strava'; try { tab = localStorage.getItem('story_src') || tab; } catch {}
+  let tab = 'file'; try { tab = localStorage.getItem('story_src') || tab; } catch {}
   setSourceTab(tab);
 
   // image size: the canvas stays 1080 wide, only the height changes
@@ -348,6 +348,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   acts = [sampleActivity()];
   showActivities(0);
+  setStatus('Showing a sample ride. Add your own file to replace it.');
   const q = new URLSearchParams(location.search);
   if (q.has('connected')) { track('login', { method: 'Strava' }); history.replaceState(null, '', '/'); }
   if (tok.access) openStrava();

@@ -5,8 +5,9 @@ and friends. Pick an activity from Strava, or drop a GPX or FIT file.
 
 **Live:** https://story.doniwirawan.xyz
 
-- 35 templates: map + stats cards, elevation and pace charts, splits, and a collage
-  of your longest rides
+- 43 templates: map + stats cards, elevation and pace charts, splits, a collage of
+  your longest rides, photo-first cards (Photo, Polaroid), bold type (Cover, Numbers),
+  elevation profiles (Climb, Ridge) and retro looks (Receipt, race Bib)
 - Three sizes: Story 9:16, Portrait 4:5 (Instagram feed) and Square 1:1
 - **Custom** template: drag, resize, flip or hide every element on the card
   (right-click an element for more)
