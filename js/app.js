@@ -1,0 +1,311 @@
+/* Ascent Story — standalone app around the story card code (story-*.js).
+   Activities come from Strava (OAuth) or from GPX/FIT files read in the
+   browser. Either way they end up in `acts` in the shape of Strava's
+   activity objects, which is what the story code draws from. */
+
+let acts = [];
+const fileStreams = {}; // streams for activities read from files, by id
+
+/* ── Strava auth ── */
+const tok = {
+  get access() { return localStorage.getItem('strava_access_token'); },
+  get refresh() { return localStorage.getItem('strava_refresh_token'); },
+  get expires() { return +localStorage.getItem('strava_expires_at') || 0; },
+  save(d) {
+    localStorage.setItem('strava_access_token', d.access_token);
+    localStorage.setItem('strava_refresh_token', d.refresh_token);
+    localStorage.setItem('strava_expires_at', d.expires_at);
+  },
+  clear() { ['strava_access_token', 'strava_refresh_token', 'strava_expires_at'].forEach(k => localStorage.removeItem(k)); },
+};
+
+async function connectStrava() {
+  const r = await fetch('/api/config');
+  const { clientId } = r.ok ? await r.json() : {};
+  if (!clientId) { showError('Strava login is not configured on this server. You can still upload a GPX or FIT file.'); return; }
+  const q = new URLSearchParams({
+    client_id: clientId, response_type: 'code', approval_prompt: 'auto',
+    redirect_uri: location.origin + '/callback.html', scope: 'read,activity:read_all',
+  });
+  location.href = 'https://www.strava.com/oauth/authorize?' + q;
+}
+
+async function refreshToken() {
+  const r = await fetch('/api/strava-token', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: tok.refresh }),
+  });
+  if (!r.ok) { tok.clear(); throw new Error('Strava session expired — connect again'); }
+  tok.save(await r.json());
+}
+
+/* The story code calls api('/activities/{id}') and api('/activities/{id}/streams?…').
+   Activities read from a file are answered locally; the rest go to Strava. */
+async function api(ep, retry = false) {
+  const m = ep.match(/^\/activities\/(file-[\w-]+)(\/streams)?/);
+  if (m) {
+    if (m[2]) return fileStreams[m[1]] || {};
+    return acts.find(a => a.id === m[1]) || {};
+  }
+  if (!tok.access) throw new Error('Not connected to Strava');
+  if (tok.expires * 1000 < Date.now() + 60000) await refreshToken();
+  const r = await fetch('https://www.strava.com/api/v3' + ep, { headers: { Authorization: 'Bearer ' + tok.access } });
+  if (r.status === 401 && !retry) { await refreshToken(); return api(ep, true); }
+  if (!r.ok) throw new Error('Strava API ' + r.status);
+  return r.json();
+}
+
+async function loadStravaActivities() {
+  setStatus('Loading your Strava activities…');
+  const list = [];
+  for (let page = 1; page <= 2; page++) {
+    const batch = await api(`/athlete/activities?per_page=100&page=${page}`);
+    list.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return list;
+}
+
+/* ── GPX / FIT ── */
+const R = 6371000, rad = d => d * Math.PI / 180;
+function haversine(a, b) {
+  const dLa = rad(b.lat - a.lat), dLn = rad(b.lng - a.lng);
+  const h = Math.sin(dLa / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLn / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+// Keep at most `max` points, evenly spaced, for the summary polyline.
+const thin = (pts, max) => pts.length <= max ? pts : Array.from({ length: max }, (_, i) => pts[Math.round(i * (pts.length - 1) / (max - 1))]);
+
+/** Build a Strava-like activity (and its streams) from track points:
+    [{lat, lng, ele, time (ms), hr, cad, power}] plus optional summary values. */
+function activityFromPoints(id, name, type, pts, summary = {}) {
+  pts = pts.filter(p => isFinite(p.lat) && isFinite(p.lng) && !(p.lat === 0 && p.lng === 0));
+  if (pts.length < 2) throw new Error('No GPS track in this file');
+  let dist = 0, moving = 0, maxSpeed = 0, gain = 0, lastEle = null;
+  const dStream = [0], vStream = [0];
+  for (let i = 1; i < pts.length; i++) {
+    const d = haversine(pts[i - 1], pts[i]);
+    const dt = (pts[i].time - pts[i - 1].time) / 1000;
+    dist += d; dStream.push(dist);
+    const v = dt > 0 ? d / dt : 0;
+    vStream.push(v);
+    if (dt > 0 && dt < 30 && v > 0.5) moving += dt; // pauses and stops don't count as moving
+  }
+  // max speed over a 5-point window, so single GPS jumps don't count
+  for (let i = 4; i < vStream.length; i++) maxSpeed = Math.max(maxSpeed, (vStream[i] + vStream[i - 1] + vStream[i - 2] + vStream[i - 3] + vStream[i - 4]) / 5);
+  // elevation gain with a 2 m deadband against GPS/barometer noise
+  for (const p of pts) {
+    if (p.ele == null) continue;
+    if (lastEle == null) lastEle = p.ele;
+    else if (p.ele - lastEle > 2) { gain += p.ele - lastEle; lastEle = p.ele; }
+    else if (lastEle - p.ele > 2) lastEle = p.ele;
+  }
+  const avg = k => { const v = pts.map(p => p[k]).filter(x => x > 0); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
+  const max = k => { const v = pts.map(p => p[k]).filter(x => x > 0); return v.length ? Math.max(...v) : null; };
+  const t0 = pts[0].time, t1 = pts[pts.length - 1].time;
+  const elapsed = t0 && t1 ? Math.round((t1 - t0) / 1000) : 0;
+  if (!moving) moving = elapsed;
+  dist = summary.distance || dist;
+  moving = summary.moving_time || moving;
+  const act = {
+    id, name, type, sport_type: type,
+    start_date: new Date(t0 || Date.now()).toISOString(),
+    start_date_local: new Date(t0 || Date.now()).toISOString(),
+    distance: dist, moving_time: Math.round(moving), elapsed_time: summary.elapsed_time || elapsed,
+    total_elevation_gain: Math.round(summary.total_elevation_gain || gain),
+    average_speed: moving ? dist / moving : 0,
+    max_speed: summary.max_speed || maxSpeed,
+    average_heartrate: summary.average_heartrate || avg('hr'),
+    max_heartrate: summary.max_heartrate || max('hr'),
+    average_cadence: summary.average_cadence || avg('cad'),
+    average_watts: summary.average_watts || avg('power'),
+    calories: summary.calories || null,
+    start_latlng: [pts[0].lat, pts[0].lng],
+    map: { summary_polyline: encodePolyline(thin(pts, 1500).map(p => [p.lat, p.lng])) },
+    _detailed: true, _fromFile: true,
+  };
+  const s = thin(pts.map((p, i) => ({ ...p, d: dStream[i], v: vStream[i] })), 2000);
+  const streams = { distance: { data: s.map(p => p.d) }, velocity_smooth: { data: s.map(p => p.v) } };
+  if (s.some(p => p.ele != null)) streams.altitude = { data: s.map(p => p.ele ?? 0) };
+  if (s.some(p => p.hr)) streams.heartrate = { data: s.map(p => p.hr || 0) };
+  if (s.some(p => p.cad)) streams.cadence = { data: s.map(p => p.cad || 0) };
+  fileStreams[id] = streams;
+  return act;
+}
+
+const GPX_TYPES = { running: 'Run', run: 'Run', trail_running: 'TrailRun', walking: 'Walk', hiking: 'Hike', mountain_biking: 'MountainBikeRide', gravel_cycling: 'GravelRide' };
+function parseGpx(text, id, fileName) {
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.querySelector('parsererror')) throw new Error('Not a valid GPX file');
+  const pick = (el, tag) => { const n = el.getElementsByTagNameNS('*', tag)[0]; return n ? parseFloat(n.textContent) : null; };
+  const pts = [...doc.getElementsByTagNameNS('*', 'trkpt'), ...doc.getElementsByTagNameNS('*', 'rtept')].map(el => {
+    const time = el.getElementsByTagNameNS('*', 'time')[0];
+    return {
+      lat: parseFloat(el.getAttribute('lat')), lng: parseFloat(el.getAttribute('lon')),
+      ele: pick(el, 'ele'), time: time ? Date.parse(time.textContent) : 0,
+      hr: pick(el, 'hr'), cad: pick(el, 'cad'), power: pick(el, 'power'),
+    };
+  });
+  const trk = doc.getElementsByTagNameNS('*', 'trk')[0];
+  const nameEl = trk && trk.getElementsByTagNameNS('*', 'name')[0];
+  const typeEl = trk && trk.getElementsByTagNameNS('*', 'type')[0];
+  const t = typeEl ? typeEl.textContent.trim() : '';
+  const type = GPX_TYPES[t.toLowerCase()] || (/^[A-Z]/.test(t) ? t : 'Ride');
+  return activityFromPoints(id, nameEl ? nameEl.textContent.trim() : fileName.replace(/\.\w+$/, ''), type, pts);
+}
+
+const FIT_SPORTS = { cycling: 'Ride', running: 'Run', walking: 'Walk', hiking: 'Hike', swimming: 'Swim', eBiking: 'EBikeRide' };
+const FIT_SUB = { mountain: 'MountainBikeRide', gravelCycling: 'GravelRide', trail: 'TrailRun', virtualActivity: 'VirtualRide', indoorCycling: 'VirtualRide' };
+async function parseFit(buf, id, fileName) {
+  const { Decoder, Stream } = await import('https://cdn.jsdelivr.net/npm/@garmin/fitsdk@21/+esm');
+  const decoder = new Decoder(Stream.fromArrayBuffer(buf));
+  if (!decoder.isFIT()) throw new Error('Not a valid FIT file');
+  const { messages, errors } = decoder.read();
+  if (errors && errors.length && !(messages.recordMesgs || []).length) throw new Error('Could not read this FIT file');
+  const semi = v => v * (180 / 2 ** 31);
+  const pts = (messages.recordMesgs || []).filter(r => r.positionLat != null && r.positionLong != null).map(r => ({
+    lat: semi(r.positionLat), lng: semi(r.positionLong),
+    ele: r.enhancedAltitude ?? r.altitude ?? null, time: r.timestamp ? new Date(r.timestamp).getTime() : 0,
+    hr: r.heartRate || null, cad: r.cadence || null, power: r.power || null,
+  }));
+  const ses = (messages.sessionMesgs || [])[0] || {};
+  const type = FIT_SUB[ses.subSport] || FIT_SPORTS[ses.sport] || 'Ride';
+  return activityFromPoints(id, fileName.replace(/\.\w+$/, ''), type, pts, {
+    distance: ses.totalDistance, moving_time: ses.totalTimerTime, elapsed_time: ses.totalElapsedTime,
+    total_elevation_gain: ses.totalAscent, max_speed: ses.enhancedMaxSpeed ?? ses.maxSpeed,
+    average_heartrate: ses.avgHeartRate, max_heartrate: ses.maxHeartRate, average_cadence: ses.avgCadence,
+    average_watts: ses.avgPower, calories: ses.totalCalories,
+  });
+}
+
+let fileSeq = 0;
+async function readFiles(files) {
+  const added = [];
+  for (const f of files) {
+    const id = 'file-' + Date.now().toString(36) + '-' + (fileSeq++);
+    try {
+      if (/\.gpx$/i.test(f.name)) added.push(parseGpx(await f.text(), id, f.name));
+      else if (/\.fit$/i.test(f.name)) added.push(await parseFit(await f.arrayBuffer(), id, f.name));
+      else throw new Error('Use a .gpx or .fit file');
+    } catch (e) { showError(`${f.name}: ${e.message}`); }
+  }
+  if (!added.length) return;
+  setStatus(added.length === 1 ? `Loaded ${added[0].name}` : `Loaded ${added.length} files`);
+  addActivities(added);
+}
+
+/* ── UI ── */
+const $ = id => document.getElementById(id);
+function setStatus(msg) { $('status').textContent = msg || ''; $('error').textContent = ''; }
+function showError(msg) { $('error').textContent = msg; $('status').textContent = ''; }
+
+// A made-up loop so the preview is never empty before real data arrives.
+function sampleActivity() {
+  const t0 = Date.now() - 3 * 3600e3, pts = [];
+  for (let i = 0; i <= 360; i++) {
+    const a = i / 360 * 2 * Math.PI;
+    pts.push({ lat: -8.28 + 0.05 * Math.sin(a) + 0.012 * Math.sin(5 * a), lng: 115.16 + 0.07 * Math.cos(a) + 0.01 * Math.cos(3 * a),
+      ele: 300 + 180 * Math.max(0, Math.sin(a - 1)), time: t0 + i * 20e3, hr: 138 + Math.round(14 * Math.sin(2 * a)), cad: 86 });
+  }
+  const act = activityFromPoints('file-sample', 'Morning Ride', 'Ride', pts);
+  act._sample = true;
+  return act;
+}
+
+// (Re)build the editor for the current `acts`, selecting `index`.
+function showActivities(index = 0) {
+  openStoryModal();
+  const picker = $('activityPicker');
+  const pick = picker.onchange;
+  picker.onchange = async () => { await pick(); syncName(); };
+  if (index > 0 && picker.options[index]) { picker.value = String(index); picker.onchange(); } else syncName();
+}
+
+const currentAct = () => acts[parseInt($('activityPicker').value) || 0] || {};
+function syncName() { $('actName').value = currentAct().name || ''; }
+
+function addActivities(list, select) {
+  acts = [...list, ...acts.filter(a => !a._sample && !list.includes(a))].sort((a, b) => b.start_date.localeCompare(a.start_date));
+  showActivities(Math.max(0, acts.indexOf(select || list[0])));
+}
+
+function renderSource() {
+  const connected = !!tok.access;
+  $('connectBtn').hidden = connected;
+  $('stravaRow').hidden = !connected;
+}
+
+function setSourceTab(name) {
+  document.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.src === name));
+  document.querySelectorAll('.src-pane').forEach(p => { p.hidden = p.dataset.pane !== name; });
+  try { localStorage.setItem('story_src', name); } catch {}
+}
+
+async function openStrava() {
+  try {
+    const list = await loadStravaActivities();
+    setStatus(list.length ? `${list.length} activities loaded from Strava` : '');
+    if (!list.length) { showError('No activities found on your Strava account.'); return; }
+    acts = acts.filter(a => a._fromFile && !a._sample); // keep uploaded files, drop the sample
+    addActivities(list);
+  } catch (e) { showError(e.message); renderSource(); }
+}
+
+// Render the PNG without the drag guides of the editable layouts.
+function exportCanvas(done) {
+  const canvas = $('storyCanvas');
+  const editable = activeLayout === 'custom' || activeLayout === 'collage';
+  const wasEditing = customEditMode;
+  if (editable && wasEditing) { customEditMode = false; drawStoryCanvas(); }
+  canvas.toBlob(blob => {
+    if (editable && wasEditing) { customEditMode = true; drawStoryCanvas(); }
+    if (blob) done(blob);
+  }, 'image/png');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  renderSource();
+  $('connectBtn').onclick = connectStrava;
+  $('stravaBtn').onclick = openStrava;
+  $('logoutBtn').onclick = () => { tok.clear(); renderSource(); setStatus('Disconnected from Strava'); };
+  document.querySelectorAll('.seg-btn').forEach(b => b.onclick = () => setSourceTab(b.dataset.src));
+  let tab = 'strava'; try { tab = localStorage.getItem('story_src') || tab; } catch {}
+  setSourceTab(tab);
+
+  $('unitToggle').value = useImperial ? 'mi' : 'km';
+  $('unitToggle').onchange = e => { setUnits(e.target.value === 'mi'); showActivities(parseInt($('activityPicker').value) || 0); };
+  $('actName').oninput = e => { currentAct().name = e.target.value; drawStoryCanvas(); };
+
+  const input = $('fileInput');
+  input.onchange = () => { readFiles([...input.files]); input.value = ''; };
+  const drop = $('dropZone');
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => readFiles([...e.dataTransfer.files]));
+
+  $('downloadBtn').onclick = () => exportCanvas(blob => {
+    const a = document.createElement('a');
+    a.download = 'story.png'; a.href = URL.createObjectURL(blob); a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  if (navigator.clipboard && window.ClipboardItem) {
+    $('copyBtn').onclick = () => exportCanvas(async blob => {
+      try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); setStatus('Image copied'); }
+      catch { showError('Copy is not allowed here — use Download'); }
+    });
+  } else $('copyBtn').hidden = true;
+  // Web Share (Instagram / WhatsApp / …) where the browser can share files, mostly mobile
+  let canShareFiles = false;
+  try { canShareFiles = !!(navigator.canShare && navigator.canShare({ files: [new File([new Blob()], 'x.png', { type: 'image/png' })] })); } catch {}
+  if (canShareFiles) {
+    $('shareStoryBtn').style.display = '';
+    $('shareStoryBtn').onclick = () => exportCanvas(async blob => {
+      try { await navigator.share({ files: [new File([blob], 'story.png', { type: 'image/png' })], title: 'My activity' }); } catch {}
+    });
+  }
+
+  acts = [sampleActivity()];
+  showActivities(0);
+  if (tok.access) openStrava();
+});

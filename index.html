@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ascent Story</title>
+  <meta name="description" content="Turn a Strava activity or a GPX/FIT file into a 1080×1920 story image. Runs in your browser.">
+  <meta name="theme-color" content="#090909">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="css/story.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">Ascent <span>Story</span></div>
+  <div class="tagline">Runs in your browser — your files never leave your device</div>
+</header>
+
+<div class="modal-overlay open page" id="storyModal">
+  <div class="modal" style="max-width:1000px;">
+    <div class="modal-body">
+      <div class="modal-left">
+
+        <div class="src">
+          <div class="picker-label">Source</div>
+          <div class="seg" role="tablist">
+            <button type="button" class="seg-btn active" data-src="strava" role="tab">Strava</button>
+            <button type="button" class="seg-btn" data-src="file" role="tab">Activity file</button>
+          </div>
+          <div class="src-pane" data-pane="strava">
+            <button class="btn btn-primary" id="connectBtn">Connect with Strava</button>
+            <div class="src-row" id="stravaRow" hidden>
+              <button class="btn btn-primary" id="stravaBtn">Load my activities</button>
+              <button class="btn btn-ghost" id="logoutBtn">Disconnect</button>
+            </div>
+            <p class="src-note">Reads your recent activities to draw the card. Nothing is stored on a server.</p>
+          </div>
+          <div class="src-pane" data-pane="file" hidden>
+            <label class="drop" id="dropZone" for="fileInput">Drop a <b>.gpx</b> or <b>.fit</b> file, or click to choose</label>
+            <input type="file" id="fileInput" class="vis-hidden" accept=".gpx,.fit" multiple>
+            <p class="src-note">Files are read in your browser and never uploaded.</p>
+          </div>
+          <div class="status" id="status"></div>
+          <div class="error" id="error" role="alert"></div>
+        </div>
+
+        <div>
+          <div class="picker-label">Activity</div>
+          <select id="activityPicker" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;"></select>
+          <input type="text" id="actName" class="text-in" placeholder="Activity name" aria-label="Activity name" maxlength="80">
+          <div class="unit-row"><span>Units</span><select id="unitToggle" aria-label="Units"><option value="km">Metric</option><option value="mi">Imperial</option></select></div>
+        </div>
+
+        <div>
+          <div class="picker-label">Display</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;padding:5px 10px;background:var(--surface2);border-radius:5px;border:1px solid var(--border);" id="lbl-hideTitle">
+              <input type="checkbox" id="chk-hideTitle" style="accent-color:var(--orange);"> Hide Title
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;padding:5px 10px;background:var(--surface2);border-radius:5px;border:1px solid var(--border);" id="lbl-hideDate">
+              <input type="checkbox" id="chk-hideDate" style="accent-color:var(--orange);"> Hide Date
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;padding:5px 10px;background:var(--surface2);border-radius:5px;border:1px solid var(--border);" id="lbl-hideRoute">
+              <input type="checkbox" id="chk-hideRoute" style="accent-color:var(--orange);"> Hide Map
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;padding:5px 10px;background:var(--surface2);border-radius:5px;border:1px solid var(--border);" id="lbl-hideLogo">
+              <input type="checkbox" id="chk-hideLogo" style="accent-color:var(--orange);"> Hide Logo
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <div class="picker-label">Theme</div>
+          <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;" id="schemePicker"></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+            <span style="font-size:11px;color:var(--muted);">Accent</span>
+            <input type="color" id="accentColorPicker" value="#FC4C02" style="width:32px;height:24px;border:none;border-radius:4px;cursor:pointer;background:none;padding:0;">
+            <button class="btn btn-ghost" id="accentReset" style="font-size:10px;padding:3px 8px;">Reset</button>
+          </div>
+        </div>
+
+        <div>
+          <div class="picker-label">Background Image</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <label class="btn btn-ghost" id="bgUploadBtn" for="bgImageInput" style="font-size:11px;padding:5px 12px;cursor:pointer;">Upload Photo</label>
+            <input type="file" id="bgImageInput" accept="image/*" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;">
+            <button class="btn btn-ghost" id="clearBgBtn" style="font-size:11px;padding:5px 10px;display:none">✕ Clear</button>
+            <span id="bgImageName" style="font-size:11px;color:var(--muted);"></span>
+          </div>
+        </div>
+
+        <div id="collageSettings" style="display:none">
+          <div class="picker-label">Collage</div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <label style="font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:5px;">
+              <span>Stickers to show: <b id="collageCountVal" style="color:var(--text);">30</b></span>
+              <input type="range" id="collageCount" min="4" max="150" value="30" step="1" style="width:100%;accent-color:var(--orange);">
+            </label>
+            <label style="font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:5px;">
+              <span>Minimum distance: <b id="collageMinVal" style="color:var(--text);">30 km</b></span>
+              <input type="range" id="collageMin" min="0" max="100" value="30" step="5" style="width:100%;accent-color:var(--orange);">
+            </label>
+            <div style="font-size:10.5px;color:var(--muted);line-height:1.5;">Longest rides show first. Drag the dashed <b>“keep clear”</b> box on the preview to set where stickers won’t go.</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="picker-label">Stats</div>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;" id="statToggles"></div>
+        </div>
+
+        <div>
+          <div class="picker-label">Templates</div>
+          <div class="layout-grid" id="layoutPicker"></div>
+        </div>
+      </div>
+
+      <div class="story-right">
+        <div class="story-preview">
+          <canvas id="storyCanvas" width="1080" height="1920"></canvas>
+        </div>
+        <div class="story-editor" id="storyHint" style="display:none">
+          <div class="story-toolbar" id="customToolbar">
+            <button type="button" data-act="smaller" title="Smaller">A−</button>
+            <button type="button" data-act="bigger" title="Bigger">A+</button>
+            <button type="button" data-act="fliph" title="Flip route horizontally">⇋</button>
+            <button type="button" data-act="flipv" title="Flip route vertically">⇅</button>
+            <button type="button" data-act="hide" title="Hide selected">Hide</button>
+            <button type="button" data-act="resetone" title="Reset selected">Reset</button>
+            <button type="button" class="btn btn-ghost" id="customReset" style="font-size:11px;padding:4px 10px;margin-left:auto;">Reset all</button>
+          </div>
+          <span class="story-hinttext">Tap an element to select it. Drag to move (snaps to centre &amp; edges) · drag the corner handles, scroll, or A−/A+ to resize.</span>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="copyBtn">Copy</button>
+          <button class="btn btn-primary" id="shareStoryBtn" style="display:none">Share</button>
+          <button class="btn btn-primary" id="downloadBtn">Download PNG</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script src="js/utils.js"></script>
+<script src="js/story-core.js"></script>
+<script src="js/story-draw.js"></script>
+<script src="js/story-layouts.js"></script>
+<script src="js/story-ui.js"></script>
+<script src="js/app.js"></script>
+<footer class="foot">Open source (MIT) · <a href="https://github.com/doniwirawan/ascent-story">GitHub</a> · Part of <a href="https://ascent-analytics.doniwirawan.xyz/">Ascent</a> · Not affiliated with Strava</footer>
+</body>
+</html>
