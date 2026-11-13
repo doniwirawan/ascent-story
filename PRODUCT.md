@@ -44,7 +44,7 @@ same ones that power the Story card in the Ascent dashboard.
 
 - Static site, no build step, no framework: `index.html`, `js/*.js`, `css/*.css`, two Vercel
   functions in `api/` (Strava token exchange, public config). Keep it that way.
-- 43 canvas templates in `js/story-layouts.js`, shared with the Ascent repo's copy; a template
+- 47 canvas templates in `js/story-layouts.js`, shared with the Ascent repo's copy; a template
   added here should be added there too. Each must scale with `S = W/1080`, work at heights 1920,
   1350 and 1080 (or be listed in `LAYOUT_NOT_AT`), honour the hide toggles, and use only the ticked
   stats.
