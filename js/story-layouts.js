@@ -66,6 +66,14 @@ function drawLayout(canvas, act, selected, sc, layout) {
     return !!v && (0.299 * v[0] + 0.587 * v[1] + 0.114 * v[2]) > 186; };
 
 
+  // logo, title and date stacked from y in the given colours; returns the y below them
+  const headBlock = (y, tc, mc, logoRight) => {
+    if (!hideLogo) { ctx.textAlign = logoRight ? 'right' : 'left'; ctx.fillStyle = mc; ctx.font = `800 ${Math.round(22 * S)}px -apple-system,sans-serif`; ctx.letterSpacing = '0.14em'; ctx.fillText('ASCENT', logoRight ? W - P : P, y + Math.round(22 * S)); ctx.letterSpacing = '0px'; y += Math.round((logoRight ? 50 : 60) * S); }
+    if (!hideTitle) { const nm = act.name || 'Activity', fs = fitText(nm, W - P * 2, 60, 800); ctx.fillStyle = tc; ctx.textAlign = 'left'; ctx.letterSpacing = '-0.02em'; ctx.fillText(nm, P, y + fs); ctx.letterSpacing = '0px'; y += fs + Math.round(14 * S); }
+    if (!hideDate) { ctx.fillStyle = mc; ctx.font = F(24, 500); ctx.textAlign = 'left'; ctx.fillText((act.start_date ? fmtDt(act.start_date) : '') + ' · ' + (act.type || ''), P, y + Math.round(26 * S)); y += Math.round(44 * S); }
+    return y;
+  };
+
   // title block: name + date · type
   function title(x, y, maxW, sz) {
     let n = act.name || 'Activity';
@@ -2731,5 +2739,210 @@ function drawLayout(canvas, act, selected, sc, layout) {
       break;
     }
 
+
+    /* FACTS: the ride as a nutrition-facts panel. Heavy black rules, the
+       first stat as the "amount per ride" line, and a % column comparing
+       each total with this sport's biggest in the loaded history. Paper
+       stock, so it keeps its own colours. */
+    case 'facts': {
+      if (!skipBg && !isTransp) { ctx.fillStyle = baseBgDark; ctx.fillRect(0, 0, W, H); }
+      const ink = '#111111';
+      const hv = (wt, px) => `${wt} ${Math.max(1, Math.round(px))}px "Helvetica Neue",Helvetica,Arial,sans-serif`;
+      const fitF = (txt, maxW, px, wt) => { let f = Math.round(px); ctx.font = hv(wt, f); while (f > 4 && ctx.measureText(txt).width > maxW) { f--; ctx.font = hv(wt, f); } return f; };
+      const pool = (typeof acts !== 'undefined' && Array.isArray(acts)) ? acts.filter(a => a.type === act.type) : [];
+      const PCT = ['distance', 'moving_time', 'total_elevation_gain', 'kilojoules', 'calories', 'suffer_score', 'achievement_count'];
+      const pctFor = k => { if (!PCT.includes(k) || pool.length < 3) return ''; const v = +act[k] || 0, m = Math.max(...pool.map(a => +a[k] || 0)); return v > 0 && m > 0 ? Math.round(v / m * 100) + '%' : ''; };
+      const hero = selected[0], rest = selected.slice(1, 7);
+      const pcts = rest.map(s => pctFor(s.key)), heroPct = hero ? pctFor(hero.key) : '', anyPct = !!heroPct || pcts.some(Boolean);
+      const t = act.type || '', kind = /Run/.test(t) ? 'Run' : /Swim/.test(t) ? 'Swim' : /Walk|Hike/.test(t) ? 'Walk' : isRide(act) ? 'Ride' : 'Activity';
+      const pw = Math.round(Math.min(W * 0.8, H * 0.6)), u = pw / 860, pad = Math.round(28 * u), iw = pw - pad * 2;
+      const rowH = Math.round(62 * u), thin = Math.max(1, Math.round(2 * u)), thick = Math.max(2, Math.round(20 * u)), mid = Math.max(2, Math.round(9 * u));
+      const titleH = Math.round(118 * u), subH = (hideTitle ? 0 : Math.round(42 * u)) + (hideDate ? 0 : Math.round(38 * u));
+      const heroH = hero ? Math.round(122 * u) : 0, pctH = anyPct ? Math.round(42 * u) : Math.round(8 * u);
+      const footH = Math.round((anyPct ? 84 : hideLogo ? 10 : 50) * u);
+      const ph = pad + titleH + subH + Math.round(10 * u) + thick + heroH + mid + pctH + rest.length * rowH + mid + footH + pad;
+      const hasRoute = polyline && polyline.length > 1 && !hideRoute, gapR = Math.round(44 * S);
+      let rH = hasRoute ? Math.min(Math.round(H * 0.32), H - ph - P * 2 - gapR) : 0; if (rH < Math.round(80 * S)) rH = 0;
+      const px = (W - pw) / 2, py = Math.round((H - ph - (rH ? rH + gapR : 0)) / 2);
+      ctx.fillStyle = ink; ctx.fillRect(px, py, pw, ph);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(px + thin * 2, py + thin * 2, pw - thin * 4, ph - thin * 4);
+      const x0 = px + pad; let y = py + pad, f;
+      ctx.fillStyle = ink; ctx.textAlign = 'left';
+      const tt = kind + ' Facts'; f = fitF(tt, iw, 104 * u, 900); ctx.letterSpacing = '-0.02em'; ctx.fillText(tt, x0 - Math.round(3 * u), y + f * 0.86); ctx.letterSpacing = '0px'; y += titleH;
+      ctx.fillRect(x0, y - Math.round(14 * u), iw, thin);
+      if (!hideTitle) { ctx.font = hv(700, 30 * u); ctx.textAlign = 'left'; ctx.fillText('Serving size', x0, y + Math.round(30 * u));
+        const lw = ctx.measureText('Serving size').width + Math.round(24 * u), nm = act.name || 'Activity';
+        fitF(nm, iw - lw, 30 * u, 900); ctx.textAlign = 'right'; ctx.fillText(nm, x0 + iw, y + Math.round(30 * u)); y += Math.round(42 * u); }
+      if (!hideDate) { ctx.font = hv(400, 26 * u); ctx.textAlign = 'left'; ctx.fillText((act.start_date ? fmtDt(act.start_date) : '') + ' · ' + t, x0, y + Math.round(28 * u)); y += Math.round(38 * u); }
+      y += Math.round(10 * u); ctx.fillRect(x0, y, iw, thick); y += thick;
+      if (hero) { const { num, unit } = statVal(hero, act), v = num + (unit ? ' ' + unit : '');
+        ctx.font = hv(700, 24 * u); ctx.textAlign = 'left'; ctx.fillText('Amount per ' + kind.toLowerCase(), x0, y + Math.round(32 * u));
+        if (heroPct) { ctx.textAlign = 'right'; ctx.fillText(heroPct + ' of best*', x0 + iw, y + Math.round(32 * u)); }
+        const vf = fitF(v, iw * 0.56, 76 * u, 900); ctx.textAlign = 'right'; ctx.fillText(v, x0 + iw, y + Math.round(108 * u));
+        const vw = ctx.measureText(v).width; fitF(hero.label, iw - vw - Math.round(20 * u), 48 * u, 900); ctx.textAlign = 'left'; ctx.fillText(hero.label, x0, y + Math.round(108 * u)); y += heroH; }
+      ctx.fillRect(x0, y, iw, mid); y += mid;
+      if (anyPct) { ctx.font = hv(700, 24 * u); ctx.textAlign = 'right'; ctx.fillText('% of best*', x0 + iw, y + Math.round(30 * u)); }
+      y += pctH;
+      rest.forEach((s, i) => { const { num, unit } = statVal(s, act), by = y + rowH * 0.64;
+        ctx.fillRect(x0, y, iw, thin);
+        ctx.textAlign = 'left'; ctx.font = hv(800, 30 * u); ctx.fillText(s.label, x0, by);
+        const lw = ctx.measureText(s.label + ' ').width; ctx.font = hv(400, 30 * u); ctx.fillText(num + (unit ? ' ' + unit : ''), x0 + lw, by);
+        if (pcts[i]) { ctx.font = hv(800, 30 * u); ctx.textAlign = 'right'; ctx.fillText(pcts[i], x0 + iw, by); }
+        y += rowH; });
+      ctx.fillRect(x0, y, iw, mid); y += mid;
+      ctx.font = hv(400, 20 * u); ctx.textAlign = 'left';
+      if (anyPct) { ctx.fillText('* Compared with your biggest ' + (t || 'activity') + ' in the', x0, y + Math.round(30 * u)); ctx.fillText('loaded history.', x0, y + Math.round(56 * u)); }
+      if (!hideLogo) { ctx.font = hv(900, 22 * u); ctx.letterSpacing = '0.12em'; ctx.textAlign = anyPct ? 'right' : 'left'; ctx.fillText('ASCENT', anyPct ? x0 + iw : x0, y + Math.round((anyPct ? 56 : 34) * u)); ctx.letterSpacing = '0px'; }
+      if (rH) drawRoute(ctx, polyline, P, py + ph + gapR, W - P * 2, rH, sc.accent, Math.round(5 * S));
+      ctx.textAlign = 'left';
+      break;
+    }
+
+    /* POSTCARD: the back of a postcard. The title is the message with the
+       route doodled under it, the stats go on the address lines, the first
+       stat is the stamp's value and the date is the postmark. */
+    case 'postcard': {
+      if (!skipBg && !isTransp) { ctx.fillStyle = baseBgDark; ctx.fillRect(0, 0, W, H); }
+      const serif = (wt, px, it) => `${it ? 'italic ' : ''}${wt} ${Math.max(1, Math.round(px))}px Georgia,"Times New Roman",serif`;
+      const card = '#f4efe3', ink = '#2b2620', faint = '#857d70', ruleC = 'rgba(43,38,32,0.26)';
+      const stampC = isPale(sc.accent) ? '#c2410c' : sc.accent;
+      const pw = Math.round(W * 0.88), ph = Math.round(Math.min(H * 0.84, pw * 1.38)), px = (W - pw) / 2, py = (H - ph) / 2;
+      const u = pw / 950, pad = Math.round(46 * u);
+      ctx.save(); ctx.translate(W / 2, H / 2); ctx.rotate(0.012); ctx.translate(-W / 2, -H / 2);
+      ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = Math.round(40 * S); ctx.shadowOffsetY = Math.round(14 * S);
+      ctx.fillStyle = card; ctx.beginPath(); ctx.roundRect(px, py, pw, ph, Math.round(8 * u)); ctx.fill();
+      ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+      ctx.fillStyle = faint; ctx.font = serif(400, 26 * u); ctx.letterSpacing = Math.round(10 * u) + 'px'; ctx.textAlign = 'center';
+      ctx.fillText('POST CARD', px + pw / 2, py + pad + Math.round(22 * u)); ctx.letterSpacing = '0px';
+      const top = py + pad + Math.round(66 * u), bot = py + ph - pad, divX = Math.round(px + pw * 0.5);
+      ctx.fillStyle = ruleC; ctx.fillRect(divX, top, Math.max(1, Math.round(2 * u)), bot - top);
+      // the stamp: perforated edge, the first stat as its value
+      const sw = Math.round(pw * 0.25), sh = Math.round(sw * 1.22), sx = px + pw - pad - sw, sy = top;
+      ctx.fillStyle = '#fbf8f1'; ctx.fillRect(sx, sy, sw, sh);
+      const hr = Math.max(1, sw * 0.028), stp = hr * 2.7; ctx.fillStyle = card;
+      for (let k = sx + stp / 2; k < sx + sw; k += stp) { ctx.beginPath(); ctx.arc(k, sy, hr, 0, Math.PI * 2); ctx.arc(k, sy + sh, hr, 0, Math.PI * 2); ctx.fill(); }
+      for (let k = sy + stp / 2; k < sy + sh; k += stp) { ctx.beginPath(); ctx.arc(sx, k, hr, 0, Math.PI * 2); ctx.arc(sx + sw, k, hr, 0, Math.PI * 2); ctx.fill(); }
+      const m = sw * 0.09; ctx.fillStyle = stampC; ctx.fillRect(sx + m, sy + m, sw - m * 2, sh - m * 2);
+      const hero = selected[0];
+      if (hero) { const { num, unit } = statVal(hero, act); let hf = Math.round(sw * 0.3); ctx.font = `900 ${hf}px -apple-system,sans-serif`;
+        while (hf > 4 && ctx.measureText(num).width > sw - m * 3.4) { hf--; ctx.font = `900 ${hf}px -apple-system,sans-serif`; }
+        ctx.fillStyle = '#fbf8f1'; ctx.textAlign = 'center'; ctx.fillText(num, sx + sw / 2, sy + sh * 0.56);
+        if (unit) { ctx.font = `800 ${Math.round(sw * 0.1)}px -apple-system,sans-serif`; ctx.letterSpacing = '0.1em'; ctx.fillText(unit.toUpperCase(), sx + sw / 2, sy + sh * 0.56 + sw * 0.16); ctx.letterSpacing = '0px'; } }
+      if (!hideLogo) { ctx.fillStyle = '#fbf8f1'; ctx.font = `800 ${Math.round(sw * 0.075)}px -apple-system,sans-serif`; ctx.letterSpacing = '0.16em'; ctx.textAlign = 'center'; ctx.fillText('ASCENT', sx + sw / 2, sy + m + sw * 0.13); ctx.letterSpacing = '0px'; }
+      // the postmark: two rings with the date, wavy cancel lines running left
+      const pr = sw * 0.4, pcx = sx - pr * 0.1, pcy = sy + sh * 0.72;
+      ctx.strokeStyle = 'rgba(43,38,32,0.7)'; ctx.fillStyle = 'rgba(43,38,32,0.75)'; ctx.lineWidth = Math.max(1, Math.round(3 * u));
+      ctx.beginPath(); ctx.arc(pcx, pcy, pr, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.arc(pcx, pcy, pr * 0.8, 0, Math.PI * 2); ctx.stroke();
+      if (!hideDate && act.start_date) { const d = new Date(act.start_date), mo = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][d.getMonth()];
+        ctx.textAlign = 'center'; ctx.font = `800 ${Math.round(pr * 0.3)}px -apple-system,sans-serif`; ctx.fillText(d.getDate() + ' ' + mo, pcx, pcy + pr * 0.06);
+        ctx.font = `700 ${Math.round(pr * 0.2)}px -apple-system,sans-serif`; ctx.fillText(String(d.getFullYear()), pcx, pcy + pr * 0.36); }
+      const wx1 = pcx - pr * 1.08, wx0 = Math.max(divX + pad * 0.6, wx1 - pw * 0.2);
+      for (let k = -1.5; k <= 1.5; k++) { const wy = pcy + k * pr * 0.32; ctx.beginPath();
+        for (let x = wx0; x <= wx1; x += Math.max(1, 2 * u)) { const yy = wy + Math.sin((x - wx0) / (pr * 0.22)) * pr * 0.07; x === wx0 ? ctx.moveTo(x, yy) : ctx.lineTo(x, yy); } ctx.stroke(); }
+      // address lines on the right carry the other stats
+      const items = selected.slice(1, 6), y0 = sy + sh + Math.round(56 * u), colX = divX + pad * 0.7, colW = px + pw - pad - colX;
+      const lineH = Math.max(Math.round(64 * u), Math.min(Math.round(130 * u), (bot - y0) / Math.max(items.length, 1)));
+      items.forEach((s, i) => { const { num, unit } = statVal(s, act), yb = y0 + (i + 1) * lineH;
+        ctx.fillStyle = ruleC; ctx.fillRect(colX, yb, colW, Math.max(1, Math.round(2 * u)));
+        ctx.fillStyle = faint; ctx.font = serif(400, 19 * u); ctx.textAlign = 'left'; ctx.fillText(s.label, colX, yb - lineH * 0.56);
+        const v = num + (unit ? ' ' + unit : ''); let vf = Math.round(Math.min(40 * u, lineH * 0.42)); ctx.font = serif(700, vf, true);
+        while (vf > 4 && ctx.measureText(v).width > colW) { vf--; ctx.font = serif(700, vf, true); }
+        ctx.fillStyle = ink; ctx.fillText(v, colX + Math.round(6 * u), yb - Math.round(10 * u)); });
+      // the message on the left: title in a hand, date, then the route doodled below
+      const mx = px + pad, mw = divX - pad * 0.7 - mx; let my = top + Math.round(16 * u);
+      if (!hideTitle) { let tf = Math.round(54 * u), lines; const nm = act.name || 'Activity';
+        const wrap = () => { const out = []; let cur = ''; for (const w of nm.split(/\s+/)) { const tt = cur ? cur + ' ' + w : w; if (cur && ctx.measureText(tt).width > mw) { out.push(cur); cur = w; } else cur = tt; } if (cur) out.push(cur); return out; };
+        do { ctx.font = serif(700, tf, true); lines = wrap(); if (lines.length <= 4 && lines.every(l => ctx.measureText(l).width <= mw)) break; tf--; } while (tf > 6);
+        ctx.fillStyle = ink; ctx.textAlign = 'left'; lines.forEach(l => { my += tf * 1.18; ctx.fillText(l, mx, my); }); my += Math.round(18 * u); }
+      if (!hideDate) { ctx.fillStyle = faint; ctx.font = serif(400, 26 * u, true); ctx.textAlign = 'left'; my += Math.round(30 * u); ctx.fillText((act.start_date ? fmtDt(act.start_date) : '') + ' · ' + (act.type || ''), mx, my); }
+      if (polyline && polyline.length > 1 && !hideRoute) { const rt = my + Math.round(50 * u), rh = bot - rt; if (rh > Math.round(80 * u)) drawRoute(ctx, polyline, mx, rt, mw, rh, stampC, Math.max(1, Math.round(4 * u))); }
+      ctx.restore();
+      ctx.textAlign = 'left';
+      break;
+    }
+
+    /* LABEL: each stat punched onto embossed label tape and stuck down at a
+       slight angle under the route. Tilts and offsets are seeded by the
+       activity id, so a card redraws the same way. */
+    case 'label': {
+      if (!skipBg && !isTransp) { ctx.fillStyle = baseBg; ctx.fillRect(0, 0, W, H); }
+      let seed = String(act.id || act.name || 'x').split('').reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) || 1;
+      const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+      let y = headBlock(P, sc.text, sc.muted, false);
+      const items = selected.slice(0, 6).map(s => { const { num, unit } = statVal(s, act); return (s.label + '  ' + num + (unit ? ' ' + unit : '')).toUpperCase(); });
+      const tapeH = Math.round(Math.min(100 * S, (H * 0.5) / Math.max(items.length, 1) * 0.78)), gap = Math.round(tapeH * 0.3);
+      const stackTop = H - P - items.length * (tapeH + gap) + gap;
+      const hasRoute = polyline && polyline.length > 1 && !hideRoute;
+      if (hasRoute) { const rt = y + Math.round(40 * S), rh = stackTop - rt - Math.round(50 * S); if (rh > Math.round(100 * S)) drawRoute(ctx, polyline, P, rt, W - P * 2, rh, sc.accent, Math.round(6 * S)); }
+      const second = isLightCard ? '#1a1a1a' : '#ece8df';
+      const tf = (wt, px) => `${wt} ${Math.max(1, Math.round(px))}px "Arial Narrow","Roboto Condensed","Helvetica Neue",Arial,sans-serif`;
+      items.forEach((txt, i) => {
+        const col = i % 2 ? second : sc.accent, txtCol = isPale(col) ? '#1a1a1a' : '#ffffff';
+        let fs = Math.round(tapeH * 0.5); ctx.font = tf(800, fs); ctx.letterSpacing = '0.08em';
+        while (fs > 4 && ctx.measureText(txt).width + tapeH * 0.9 > W - P * 2) { fs--; ctx.font = tf(800, fs); }
+        const tw = ctx.measureText(txt).width + tapeH * 0.9, ty = stackTop + i * (tapeH + gap);
+        const tx = P + rnd() * Math.max(0, W - P * 2 - tw) * 0.5, ang = (rnd() - 0.5) * 0.06;
+        ctx.save(); ctx.translate(tx + tw / 2, ty + tapeH / 2); ctx.rotate(ang);
+        ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = Math.round(10 * S); ctx.shadowOffsetY = Math.round(4 * S);
+        const c = tapeH * 0.12, x = -tw / 2, yy = -tapeH / 2;
+        ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x + c, yy); ctx.lineTo(x + tw - c, yy); ctx.lineTo(x + tw, yy + c); ctx.lineTo(x + tw, yy + tapeH - c); ctx.lineTo(x + tw - c, yy + tapeH); ctx.lineTo(x + c, yy + tapeH); ctx.lineTo(x, yy + tapeH - c); ctx.lineTo(x, yy + c); ctx.closePath(); ctx.fill();
+        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+        const g = ctx.createLinearGradient(0, yy, 0, yy + tapeH); g.addColorStop(0, 'rgba(255,255,255,0.22)'); g.addColorStop(0.45, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(0,0,0,0.18)');
+        ctx.fillStyle = g; ctx.fill();
+        // raised letters: a dark offset under the face
+        ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillText(txt, 0, fs * 0.36 + Math.max(1, Math.round(2 * S)));
+        ctx.fillStyle = txtCol; ctx.fillText(txt, 0, fs * 0.36);
+        ctx.letterSpacing = '0px'; ctx.restore();
+      });
+      ctx.textAlign = 'left';
+      break;
+    }
+
+    /* CHRONO: a stopwatch stopped at the moving time. The long hand reads
+       minutes, the lower dial hours and the upper dial seconds; the other
+       stats are listed below. */
+    case 'chrono': {
+      if (!skipBg && !isTransp) { ctx.fillStyle = baseBg; ctx.fillRect(0, 0, W, H); }
+      let y = headBlock(P, sc.text, sc.muted, true);
+      const mt = Math.round(act.moving_time || 0), hh = Math.floor(mt / 3600), mm = (mt % 3600) / 60, ss = mt % 60;
+      const rest = selected.filter(s => s.key !== 'moving_time').slice(0, H < 1400 ? 2 : 4);
+      const rowH = Math.round(84 * S), listTop = H - P - rest.length * rowH;
+      const readH = Math.round(150 * S);
+      const R = Math.max(Math.round(40 * S), Math.min((W - P * 2) / 2 * 0.86, (listTop - y - readH - Math.round(110 * S)) / 2.2));
+      const cx = W / 2, cy = y + Math.round(40 * S) + R * 1.2;
+      const face = '#f1eee6', inkC = '#1b1a18', hand = isPale(sc.accent) ? '#c2410c' : sc.accent;
+      // crown and case
+      ctx.fillStyle = '#3a3a3d'; ctx.fillRect(cx - R * 0.09, cy - R * 1.2, R * 0.18, R * 0.16); ctx.beginPath(); ctx.roundRect(cx - R * 0.16, cy - R * 1.28, R * 0.32, R * 0.1, R * 0.03); ctx.fill();
+      const cg = ctx.createLinearGradient(cx - R, cy - R, cx + R, cy + R); cg.addColorStop(0, '#5b5b60'); cg.addColorStop(0.5, '#2a2a2d'); cg.addColorStop(1, '#4a4a4f');
+      ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(cx, cy, R * 1.08, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = face; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+      // 60 ticks, numbers every 5
+      for (let k = 0; k < 60; k++) { const a = k / 60 * Math.PI * 2 - Math.PI / 2, long = k % 5 === 0, r1 = R * (long ? 0.84 : 0.9);
+        ctx.strokeStyle = inkC; ctx.lineWidth = Math.max(1, R * (long ? 0.016 : 0.007)); ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1); ctx.lineTo(cx + Math.cos(a) * R * 0.95, cy + Math.sin(a) * R * 0.95); ctx.stroke();
+        if (long) { ctx.fillStyle = inkC; ctx.font = `800 ${Math.round(R * 0.1)}px -apple-system,sans-serif`; ctx.textAlign = 'center'; ctx.fillText(String(k || 60), cx + Math.cos(a) * R * 0.72, cy + Math.sin(a) * R * 0.72 + R * 0.036); } }
+      const sub = (scx, scy, r, frac, n, lbl) => {
+        ctx.strokeStyle = withAlpha(inkC, 0x99); ctx.lineWidth = Math.max(1, R * 0.008); ctx.beginPath(); ctx.arc(scx, scy, r, 0, Math.PI * 2); ctx.stroke();
+        for (let k = 0; k < n; k++) { const a = k / n * Math.PI * 2 - Math.PI / 2; ctx.beginPath(); ctx.moveTo(scx + Math.cos(a) * r * 0.78, scy + Math.sin(a) * r * 0.78); ctx.lineTo(scx + Math.cos(a) * r * 0.95, scy + Math.sin(a) * r * 0.95); ctx.stroke(); }
+        ctx.fillStyle = withAlpha(inkC, 0xaa); ctx.font = `700 ${Math.round(r * 0.26)}px -apple-system,sans-serif`; ctx.textAlign = 'center'; ctx.fillText(lbl, scx, scy + r * 0.5);
+        const a = frac * Math.PI * 2 - Math.PI / 2; ctx.strokeStyle = inkC; ctx.lineWidth = Math.max(1, R * 0.014); ctx.beginPath(); ctx.moveTo(scx, scy); ctx.lineTo(scx + Math.cos(a) * r * 0.8, scy + Math.sin(a) * r * 0.8); ctx.stroke();
+        ctx.fillStyle = inkC; ctx.beginPath(); ctx.arc(scx, scy, R * 0.02, 0, Math.PI * 2); ctx.fill(); };
+      sub(cx, cy + R * 0.4, R * 0.22, (hh % 12) / 12 + mm / 720, 12, 'HRS');
+      sub(cx, cy - R * 0.4, R * 0.22, ss / 60, 12, 'SEC');
+      const a = mm / 60 * Math.PI * 2 - Math.PI / 2;
+      ctx.strokeStyle = hand; ctx.lineCap = 'round'; ctx.lineWidth = Math.max(1, R * 0.025);
+      ctx.beginPath(); ctx.moveTo(cx - Math.cos(a) * R * 0.18, cy - Math.sin(a) * R * 0.18); ctx.lineTo(cx + Math.cos(a) * R * 0.9, cy + Math.sin(a) * R * 0.9); ctx.stroke(); ctx.lineCap = 'butt';
+      ctx.fillStyle = hand; ctx.beginPath(); ctx.arc(cx, cy, R * 0.05, 0, Math.PI * 2); ctx.fill();
+      // the readout
+      const ry = cy + R * 1.08 + Math.round(60 * S);
+      ctx.fillStyle = sc.accent; ctx.font = F(22, 700); ctx.letterSpacing = '0.12em'; ctx.textAlign = 'center'; ctx.fillText('MOVING TIME', cx, ry); ctx.letterSpacing = '0px';
+      const rd = `${hh}:${String(Math.floor(mm)).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+      ctx.fillStyle = sc.text; ctx.font = `800 ${Math.round(86 * S)}px "SF Mono",Menlo,Consolas,monospace`; ctx.fillText(rd, cx, ry + Math.round(94 * S));
+      rest.forEach((s, i) => { const { num, unit } = statVal(s, act), yy = listTop + i * rowH;
+        ctx.fillStyle = withAlpha(sc.muted, 0x55); ctx.fillRect(P, yy, W - P * 2, Math.max(1, Math.round(2 * S)));
+        ctx.fillStyle = sc.muted; ctx.font = F(22, 600); ctx.textAlign = 'left'; ctx.fillText(s.label, P, yy + rowH * 0.62);
+        ctx.fillStyle = sc.text; ctx.font = F(40, 800); ctx.textAlign = 'right'; ctx.fillText(num + (unit ? ' ' + unit : ''), W - P, yy + rowH * 0.66); });
+      ctx.textAlign = 'left';
+      break;
+    }
   }
 }
