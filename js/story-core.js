@@ -200,5 +200,9 @@ const LAYOUTS = [
   { id: 'postcard', name: 'Postcard' },
   { id: 'label', name: 'Label' },
   { id: 'chrono', name: 'Chrono' },
+  { id: 'calendar', name: 'Calendar' },
+  { id: 'pixel', name: 'Pixel' },
+  { id: 'blueprint', name: 'Blueprint' },
+  { id: 'record', name: 'Record' },
 
 ];

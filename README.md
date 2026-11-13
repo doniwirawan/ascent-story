@@ -5,11 +5,12 @@ and friends. Pick an activity from Strava, or drop a GPX or FIT file.
 
 **Live:** https://story.doniwirawan.xyz
 
-- 51 templates: map + stats cards, elevation and pace charts, splits, a collage of
+- 55 templates: map + stats cards, elevation and pace charts, splits, a collage of
   your longest rides, photo-first cards (Photo, Polaroid), bold type (Cover, Numbers),
   elevation profiles (Climb, Ridge), retro looks (Receipt, race Bib, split-flap Board,
-  Odometer, Logbook, passport Stamp, Postcard, label Tape, a nutrition-style Facts panel)
-  and a Chrono stopwatch
+  Odometer, Logbook, passport Stamp, Postcard, label Tape, a nutrition-style Facts panel),
+  a Chrono stopwatch, a tear-off Calendar page, Pixel art, a Blueprint with the route's real
+  extent dimensioned, and a vinyl Record
 - Three sizes: Story 9:16, Portrait 4:5 (Instagram feed) and Square 1:1
 - **Custom** template: drag, resize, flip or hide every element on the card
   (right-click an element for more)
